@@ -178,7 +178,7 @@ namespace DSR_Gadget
             initMisc();
             initHotkeys();
             initInfo();
-            reading = true;
+            reading = false;
         }
 
         private void reloadAll()

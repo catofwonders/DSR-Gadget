@@ -30,6 +30,14 @@ You can also try adding DS Gadget as an exception to your antivirus
 # Change Log
 
 ## **Best bet is to use this offline for now.**
+### Release 1.5.2 (catofwonders fork)
+
+* Fixed a crash when reading or writing an unsupported event flag ID
+* Fixed a crash when the game reports health or stamina outside the displayed range
+* Fixed a crash when position values are outside the displayed range
+* Includes the "anim cancel does standup" change from the test0503 branch
+* Builds are now made automatically on GitHub (see Releases)
+
 ### Release 1.5.1
 
 * Hair Color script now persists through loading screens  

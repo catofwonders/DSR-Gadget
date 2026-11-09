@@ -85,14 +85,32 @@ namespace DSR_Gadget
 
         private void btnEventRead_Click(object sender, EventArgs e)
         {
-            if (Int32.TryParse(txtEventFlag.Text, out int id))
+            if (!Int32.TryParse(txtEventFlag.Text.Trim(), out int id))
+                return;
+            try
+            {
                 cbxEventFlag.Checked = Hook.ReadEventFlag(id);
+            }
+            catch (ArgumentException)
+            {
+                MessageBox.Show("Event flag " + id + " isn't supported. Flags must be 8 digits from a known area.",
+                    "Event Flag", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void btnEventWrite_Click(object sender, EventArgs e)
         {
-            if (Int32.TryParse(txtEventFlag.Text, out int id))
+            if (!Int32.TryParse(txtEventFlag.Text.Trim(), out int id))
+                return;
+            try
+            {
                 Hook.WriteEventFlag(id, cbxEventFlag.Checked);
+            }
+            catch (ArgumentException)
+            {
+                MessageBox.Show("Event flag " + id + " isn't supported. Flags must be 8 digits from a known area.",
+                    "Event Flag", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void btnLastTargetEntity_Click(object sender, EventArgs e)

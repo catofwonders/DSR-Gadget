@@ -85,10 +85,10 @@ namespace DSR_Gadget
 
         private void updatePlayer()
         {
-            nudHealth.Value = Player.Hp;
-            nudHealthMax.Value = Player.MaxHp;
-            nudStamina.Value = Player.Stamina;
-            nudStaminaMax.Value = Player.MaxStamina;
+            setClamped(nudHealth, Player.Hp);
+            setClamped(nudHealthMax, Player.MaxHp);
+            setClamped(nudStamina, Player.Stamina);
+            setClamped(nudStaminaMax, Player.MaxStamina);
 
             if (cbxFreezeChrType.Checked)
                 Player.ChrType = (int)nudChrType.Value;
@@ -119,7 +119,7 @@ namespace DSR_Gadget
                 nudStableZ.Value = (decimal)pos.Z;
                 nudStableAngle.Value = angleToDegree(pos.Angle);
             }
-            catch (OverflowException)
+            catch (Exception ex) when (ex is OverflowException || ex is ArgumentOutOfRangeException)
             {
                 nudPosX.Value = 0;
                 nudPosY.Value = 0;
@@ -406,6 +406,16 @@ namespace DSR_Gadget
         {
             if (loaded && !cbxSpeed.Checked)
                 Player.AnimSpeed = 1;
+        }
+
+        // Sets a number box without crashing when the game reports a value outside the box's range
+        private static void setClamped(NumericUpDown nud, decimal value)
+        {
+            if (value < nud.Minimum)
+                value = nud.Minimum;
+            else if (value > nud.Maximum)
+                value = nud.Maximum;
+            nud.Value = value;
         }
 
         private decimal angleToDegree(float angle)
