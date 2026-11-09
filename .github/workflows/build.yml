@@ -1,0 +1,74 @@
+# Builds DSR Gadget on a Windows machine every time the code changes,
+# and publishes the finished program as a GitHub Release you can download.
+name: Build
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Get DSR Gadget code
+        uses: actions/checkout@v4
+
+      # The project expects the PropertyHook library in a PropertyHook folder inside this repository
+      - name: Get PropertyHook library
+        shell: pwsh
+        run: |
+          git clone https://github.com/Meikk99/PropertyHook "${{ github.workspace }}\PropertyHook"
+          git -C "${{ github.workspace }}\PropertyHook" checkout 9e4f588fb764e4954a7e4b94ed2bdeba9e0ae842
+          # PropertyHook targets .NET 4.6.1, which GitHub's build machines don't have.
+          # Retarget it to 4.7.2, the same version DSR Gadget itself uses.
+          $proj = "${{ github.workspace }}\PropertyHook\PropertyHook\PropertyHook.csproj"
+          (Get-Content $proj -Raw) -replace '<TargetFrameworkVersion>v4\.6\.1</TargetFrameworkVersion>', '<TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>' | Set-Content $proj
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set up NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Download packages
+        run: nuget restore DSR-Gadget.sln
+
+      - name: Build
+        run: msbuild DSR-Gadget.sln /p:Configuration=Release /p:Platform=x64 /m
+
+      - name: Package
+        id: package
+        shell: pwsh
+        run: |
+          $version = "v" + (Select-String -Path DSR-Gadget\Properties\AssemblyInfo.cs -Pattern 'AssemblyFileVersion\("([^"]+)"\)').Matches[0].Groups[1].Value
+          # The build puts the finished program in a folder like "DSR Gadget 1.7.0.0"
+          $folder = Get-ChildItem -Directory "DSR-Gadget\bin\x64\Release" -Filter "DSR Gadget *" | Select-Object -First 1
+          if (-not $folder) { throw "Build output folder not found" }
+          Compress-Archive -Path "$($folder.FullName)\*" -DestinationPath "DSR-Gadget-$version.zip" -Force
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: DSR-Gadget-${{ steps.package.outputs.version }}
+          path: DSR-Gadget-${{ steps.package.outputs.version }}.zip
+
+      # Creates (or refreshes) a Release named after the version, so the zip is easy to find and download
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ steps.package.outputs.version }}"
+          $zip = "DSR-Gadget-$version.zip"
+          # If a release for this version already exists, replace it (and its tag) so it always
+          # points at the latest code
+          gh release view $version 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release delete $version --cleanup-tag --yes
+          }
+          gh release create $version $zip --target "${{ github.sha }}" --title "DSR Gadget Local Loader $version" --notes "See the changelog in README.md. Unzip into its own folder (keep the Resources folder next to the exe) and run DSR-Gadget.exe."
