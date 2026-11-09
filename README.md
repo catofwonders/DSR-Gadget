@@ -30,6 +30,13 @@ You can also try adding DS Gadget as an exception to your antivirus
 # Change Log
 
 ## **Best bet is to use this offline for now.**
+### Release 1.7.0 (catofwonders fork)
+
+* New Params tab: a live param editor. Pick any of the game's 38 params, find a row by ID or name, and edit its fields while the game runs
+* Changed values are highlighted (hover to see the original); Reset row / Reset all changes put them back
+* Changes are in memory only: game files are never touched, and restarting the game undoes everything
+* Param definitions and row names come from Paramdex (https://github.com/soulsmods/Paramdex), in Resources/Params
+
 ### Release 1.6.0 (catofwonders fork)
 
 Ported from Phokz's Dark Souls Remastered Cheat Engine table:
