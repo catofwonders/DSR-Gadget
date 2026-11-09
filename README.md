@@ -30,6 +30,14 @@ You can also try adding DS Gadget as an exception to your antivirus
 # Change Log
 
 ## **Best bet is to use this offline for now.**
+### Release 1.6.0 (catofwonders fork)
+
+Ported from Phokz's Dark Souls Remastered Cheat Engine table:
+
+* Cheats tab: Access everything in shops, Upgrade without materials, No fall damage, Force quick or ninja rolls
+* Graphics tab: Hide HUD, Custom field of view, Set draw distance, Extra lock-on range
+* Everything is put back to normal when you untick it or close DSR Gadget
+
 ### Release 1.5.2 (catofwonders fork)
 
 * Fixed a crash when reading or writing an unsupported event flag ID

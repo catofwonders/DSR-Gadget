@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 
 namespace DSR_Gadget
 {
-    public class DSRHook : PHook
+    public partial class DSRHook : PHook
     {
         private DSROffsets Offsets;
 
@@ -117,6 +117,7 @@ namespace DSR_Gadget
             SosSignMan = CreateChildPointer(BaseCARAOB, DSROffsets.SosSignManOffset1);
             
             FuncLevelUp = RegisterAbsoluteAOB(DSROffsets.FuncLevelUpAOB);
+            initExtras();
                 
             OnHooked += DSRHook_OnHooked;
         }

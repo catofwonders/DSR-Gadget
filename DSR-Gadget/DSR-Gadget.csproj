@@ -110,11 +110,16 @@
     <Compile Include="Util\SavedPos.cs" />
     <Compile Include="Util\DSRAssembly.cs" />
     <Compile Include="Util\DSRHook.cs" />
+    <Compile Include="Util\DSRHookExtras.cs" />
+    <Compile Include="Util\CodePatch.cs" />
     <Compile Include="Util\DSROffsets.cs" />
     <Compile Include="FormMain Tabs\Misc.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="FormMain Tabs\Cheats.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="FormMain Tabs\Extras.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="FormMain Tabs\Graphics.cs">
