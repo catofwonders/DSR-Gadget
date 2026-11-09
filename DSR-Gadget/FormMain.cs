@@ -176,6 +176,7 @@ namespace DSR_Gadget
             initCheats();
             initGraphics();
             initExtras();
+            initParams();
             initMisc();
             initHotkeys();
             initInfo();
@@ -191,6 +192,7 @@ namespace DSR_Gadget
             reloadCheats();
             reloadGraphics();
             reloadExtras();
+            reloadParams();
             reloadMisc();
             reloadHotkeys();
             reloadInfo();
@@ -206,6 +208,7 @@ namespace DSR_Gadget
             updateCheats();
             updateGraphics();
             updateExtras();
+            updateParams();
             updateMisc();
             updateHotkeys();
             updateInfo();
@@ -220,6 +223,7 @@ namespace DSR_Gadget
             saveCheats();
             saveGraphics();
             saveExtras();
+            saveParams();
             saveMisc();
             saveHotkeys();
             saveInfo();
@@ -233,6 +237,7 @@ namespace DSR_Gadget
             resetCheats();
             resetGraphics();
             resetExtras();
+            resetParams();
             resetMisc();
             resetHotkeys();
             resetInfo();

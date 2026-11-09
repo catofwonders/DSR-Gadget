@@ -118,6 +118,7 @@ namespace DSR_Gadget
             
             FuncLevelUp = RegisterAbsoluteAOB(DSROffsets.FuncLevelUpAOB);
             initExtras();
+            initParams();
                 
             OnHooked += DSRHook_OnHooked;
         }
