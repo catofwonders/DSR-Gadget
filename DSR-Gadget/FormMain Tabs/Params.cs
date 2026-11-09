@@ -4,6 +4,8 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace DSR_Gadget
@@ -133,7 +135,8 @@ namespace DSR_Gadget
                 Panel2MinSize = 120,
                 FixedPanel = FixedPanel.Panel1,
             };
-            lbxParamRows = new ListBox() { Dock = DockStyle.Fill, IntegralHeight = false, HorizontalScrollbar = true };
+            lbxParamRows = new ListBox() { Dock = DockStyle.Fill, IntegralHeight = false };
+            enableDoubleBuffering(lbxParamRows);
             lbxParamRows.SelectedIndexChanged += (s, e) => selectParamRow(lbxParamRows.SelectedItem as LiveParamRow);
             split.Panel1.Controls.Add(lbxParamRows);
 
@@ -168,6 +171,7 @@ namespace DSR_Gadget
                 BackgroundColor = SystemColors.Window,
                 ShowCellToolTips = true,
             };
+            enableDoubleBuffering(dgvParamFields);
             dgvParamFields.Columns.Add(new DataGridViewTextBoxColumn() { Name = "Field", HeaderText = "Field", ReadOnly = true, FillWeight = 45 });
             dgvParamFields.Columns.Add(new DataGridViewTextBoxColumn() { Name = "Value", HeaderText = "Value", FillWeight = 30 });
             dgvParamFields.Columns.Add(new DataGridViewTextBoxColumn() { Name = "Means", HeaderText = "Points to", ReadOnly = true, FillWeight = 25 });
@@ -202,6 +206,12 @@ namespace DSR_Gadget
                 + "Select a field to see what it does here.";
             setParamStatus("Open this tab with the game running to load its params.");
             updateParamButtons();
+        }
+
+        // Double buffering stops flicker and line-by-line drawing; WinForms only exposes it to subclasses
+        private static void enableDoubleBuffering(Control control)
+        {
+            typeof(Control).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(control, true, null);
         }
 
         // Adds a tab; if the tab headers no longer fit on one line, wraps them onto rows and grows the window
@@ -263,8 +273,12 @@ namespace DSR_Gadget
             return names;
         }
 
-        private void loadParams()
+        private bool paramsLoading = false;
+
+        private async void loadParams()
         {
+            if (paramsLoading)
+                return;
             if (!Hook.Hooked)
             {
                 setParamStatus("Start the game first, then press Reload.");
@@ -274,15 +288,39 @@ namespace DSR_Gadget
             string previous = currentParam?.Name;
             int? previousRow = currentRow?.ID;
 
+            // Reading definitions, names and the game's memory takes a moment, so it runs in the background
+            // while the window stays responsive
+            paramsLoading = true;
+            btnParamReload.Enabled = false;
+            cmbParam.Enabled = false;
+            setParamStatus("Loading params...");
             try
             {
-                liveParams = Hook.LoadParams(loadRowNames);
+                liveParams = await Task.Run(() =>
+                {
+                    var defs = ParamDef.All;
+                    var loaded = Hook.LoadParams(loadRowNames);
+                    foreach (LiveParam param in loaded)
+                    {
+                        if (param.Def != null)
+                            ParamHelp.For(param.Def);
+                        param.FindRow(0);
+                    }
+                    ParamHelp.WarmEnums();
+                    return loaded;
+                });
             }
             catch (Exception ex)
             {
                 liveParams = null;
                 setParamStatus("Couldn't read params: " + ex.Message);
                 return;
+            }
+            finally
+            {
+                paramsLoading = false;
+                btnParamReload.Enabled = true;
+                cmbParam.Enabled = true;
             }
 
             foreach (LiveParam param in liveParams)
@@ -327,13 +365,15 @@ namespace DSR_Gadget
             if (currentParam != null)
             {
                 string search = txtParamSearch.Text.Trim();
+                List<object> matches = new List<object>(currentParam.Rows.Count);
                 foreach (LiveParamRow row in currentParam.Rows)
                 {
                     if (search.Length == 0
                         || row.ID.ToString(CultureInfo.InvariantCulture).StartsWith(search, StringComparison.Ordinal)
                         || (row.Name != null && row.Name.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0))
-                        lbxParamRows.Items.Add(row);
+                        matches.Add(row);
                 }
+                lbxParamRows.Items.AddRange(matches.ToArray());
             }
             lbxParamRows.EndUpdate();
             if (currentRow != null && lbxParamRows.Items.Contains(currentRow))
@@ -374,7 +414,9 @@ namespace DSR_Gadget
         private void fillParamFields()
         {
             paramGridFilling = true;
+            dgvParamFields.SuspendLayout();
             dgvParamFields.Rows.Clear();
+            List<DataGridViewRow> newRows = new List<DataGridViewRow>();
             try
             {
                 if (!checkParamUsable())
@@ -414,9 +456,14 @@ namespace DSR_Gadget
                     tag.Choices = buildChoices(field, help);
                     if (editable && tag.Choices != null)
                     {
-                        DataGridViewComboBoxCell combo = new DataGridViewComboBoxCell() { FlatStyle = FlatStyle.Flat, DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton };
-                        foreach (string choice in tag.Choices.Keys)
-                            combo.Items.Add(choice);
+                        // The arrow only shows on the cell being edited; drawing one on every row is slow
+                        DataGridViewComboBoxCell combo = new DataGridViewComboBoxCell()
+                        {
+                            FlatStyle = FlatStyle.Flat,
+                            DisplayStyle = DataGridViewComboBoxDisplayStyle.Nothing,
+                            DisplayStyleForCurrentCellOnly = true,
+                        };
+                        combo.Items.AddRange(choiceArray(tag.Choices));
                         gridRow.Cells[1] = combo;
                     }
                     string current = valueText(tag, bytes);
@@ -428,28 +475,46 @@ namespace DSR_Gadget
                         gridRow.Cells[1].Style.ForeColor = SystemColors.GrayText;
                     gridRow.Cells[2].Value = describeReference(help, field, bytes);
 
-                    dgvParamFields.Rows.Add(gridRow);
                     markParamCell(gridRow, tag, bytes, original);
+                    newRows.Add(gridRow);
                 }
+
+                dgvParamFields.Rows.AddRange(newRows.ToArray());
 
                 setParamStatus($"{currentRow.ID}" + (string.IsNullOrEmpty(currentRow.Name) ? "" : " " + currentRow.Name)
                     + " - click a value to change it.");
             }
             finally
             {
+                dgvParamFields.ResumeLayout();
                 paramGridFilling = false;
                 updateParamButtons();
                 showParamHelp();
             }
         }
 
+        private readonly Dictionary<Dictionary<string, long>, object[]> choiceArrays = new Dictionary<Dictionary<string, long>, object[]>();
+
+        private object[] choiceArray(Dictionary<string, long> choices)
+        {
+            if (!choiceArrays.TryGetValue(choices, out object[] items))
+                choiceArrays[choices] = items = choices.Keys.Cast<object>().ToArray();
+            return items;
+        }
+
+        private static readonly Dictionary<string, Dictionary<string, long>> choiceCache = new Dictionary<string, Dictionary<string, long>>();
+        private static readonly Dictionary<string, long> yesNoChoices = new Dictionary<string, long>() { ["Yes"] = 1, ["No"] = 0 };
+
         // Dropdown choices for value lists and yes/no fields, or null for plain numbers
         private static Dictionary<string, long> buildChoices(ParamField field, ParamFieldHelp help)
         {
+            if (!string.IsNullOrEmpty(help?.Enum) && choiceCache.TryGetValue(help.Enum, out var cachedChoices))
+                return cachedChoices;
             List<KeyValuePair<long, string>> options = ParamHelp.Enum(help?.Enum);
             if (options != null && options.Count > 0)
             {
                 Dictionary<string, long> choices = new Dictionary<string, long>();
+                choiceCache[help.Enum] = choices;
                 foreach (var option in options)
                 {
                     string text = $"{option.Value} ({option.Key})";
@@ -459,7 +524,7 @@ namespace DSR_Gadget
                 return choices;
             }
             if ((help?.IsBool ?? false) || (field.IsBitfield && field.BitSize == 1))
-                return new Dictionary<string, long>() { ["Yes"] = 1, ["No"] = 0 };
+                return yesNoChoices;
             return null;
         }
 

@@ -30,6 +30,10 @@ You can also try adding DS Gadget as an exception to your antivirus
 # Change Log
 
 ## **Best bet is to use this offline for now.**
+### Release 1.8.2 (catofwonders fork)
+
+* Params tab is much faster: params load in the background, the field list fills in one go, and scrolling no longer redraws line by line
+
 ### Release 1.8.1 (catofwonders fork)
 
 * Fixed a crash on startup caused by the Params tab layout

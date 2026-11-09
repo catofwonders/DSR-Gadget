@@ -123,6 +123,13 @@ namespace DSR_Gadget
             return enums.TryGetValue(name, out var options) ? options : null;
         }
 
+        /// <summary>Loads all value lists now (used while loading params in the background).</summary>
+        public static void WarmEnums()
+        {
+            if (enums == null)
+                loadEnums();
+        }
+
         private static void loadEnums()
         {
             enums = new Dictionary<string, List<KeyValuePair<long, string>>>(StringComparer.OrdinalIgnoreCase);
