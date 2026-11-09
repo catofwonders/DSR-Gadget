@@ -10,12 +10,13 @@ namespace DSR_Gadget
 {
     // Live param editor: pick a param, pick a row, edit its fields while the game runs.
     // Changes are made in the game's memory only and last until the game is restarted.
-    // Field layouts come from Paramdex (Resources/Params/Defs), row names from Resources/Params/Names.
+    // Field layouts and row names come from Paramdex (Resources/Params/Defs, Names);
+    // English field names, descriptions, value lists and references come from Smithbox (Resources/Params/Smithbox).
     public partial class FormMain : Form
     {
         private TabPage tpgParams;
         private ComboBox cmbParam;
-        private TextBox txtParamSearch;
+        private TextBox txtParamSearch, txtParamFieldFind, txtParamHelp;
         private ListBox lbxParamRows;
         private DataGridView dgvParamFields;
         private CheckBox cbxParamShowPadding;
@@ -32,20 +33,78 @@ namespace DSR_Gadget
         private readonly Dictionary<string, Dictionary<int, byte[]>> paramOriginals = new Dictionary<string, Dictionary<int, byte[]>>();
         private readonly Dictionary<string, Dictionary<int, string>> paramNameCache = new Dictionary<string, Dictionary<int, string>>();
 
+        private class ParamGridTag
+        {
+            public ParamField Field;
+            public ParamFieldHelp Help;
+            public string DisplayName;
+            public Dictionary<string, long> Choices;   // dropdown text -> raw value, for value lists and yes/no fields
+        }
+
+        // Friendly names shown in the param dropdown
+        private static readonly Dictionary<string, string> paramFriendlyNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["EquipParamWeapon"] = "Weapons",
+            ["EquipParamProtector"] = "Armor",
+            ["EquipParamAccessory"] = "Rings",
+            ["EquipParamGoods"] = "Items (consumables, keys, souls)",
+            ["ReinforceParamWeapon"] = "Weapon upgrade levels",
+            ["ReinforceParamProtector"] = "Armor upgrade levels",
+            ["NpcParam"] = "Enemies and NPCs",
+            ["AtkParam_Npc"] = "Enemy attacks",
+            ["AtkParam_Pc"] = "Player attacks",
+            ["NpcThinkParam"] = "Enemy AI",
+            ["ObjectParam"] = "Objects",
+            ["Bullet"] = "Projectiles",
+            ["BehaviorParam"] = "Enemy behaviors",
+            ["BehaviorParam_PC"] = "Player behaviors",
+            ["Magic"] = "Spells",
+            ["SpEffectParam"] = "Special effects (buffs, debuffs, statuses)",
+            ["SpEffectVfxParam"] = "Special effect visuals",
+            ["TalkParam"] = "NPC dialogue",
+            ["MenuColorTableParam"] = "Menu colors",
+            ["ItemLotParam"] = "Item drops and pickups",
+            ["MoveParam"] = "Movement speeds",
+            ["CharaInitParam"] = "Starting classes and NPC loadouts",
+            ["EquipMtrlSetParam"] = "Upgrade material costs",
+            ["FaceGenParam"] = "Faces",
+            ["RagdollParam"] = "Ragdolls",
+            ["ShopLineupParam"] = "Shops",
+            ["QwcChange"] = "World tendency changes",
+            ["QwcJudge"] = "World tendency checks",
+            ["GameAreaParam"] = "Areas (boss soul rewards)",
+            ["SkeletonParam"] = "Skeletons",
+            ["CalcCorrectGraph"] = "Stat scaling curves",
+            ["LockCamParam"] = "Lock-on camera",
+            ["ObjActParam"] = "Object actions (doors, levers, chests)",
+            ["HitMtrlParam"] = "Surface materials",
+            ["KnockBackParam"] = "Knockback",
+            ["LevelSyncParam"] = "Level sync (multiplayer)",
+            ["CoolTimeParam"] = "Cooldowns",
+            ["WhiteCoolTimeParam"] = "Summon cooldowns",
+        };
+
+        // Smithbox refers to a couple of params by slightly different names
+        private static readonly Dictionary<string, string> paramRefAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["QwcChangeParam"] = "QwcChange",
+            ["QwcJudgeParam"] = "QwcJudge",
+        };
+
         private void initParams()
         {
             tpgParams = new TabPage("Params") { UseVisualStyleBackColor = true, Padding = new Padding(3) };
 
-            // --- Top: param picker and search ---
+            // --- Top: param picker and row search ---
             Panel top = new Panel() { Dock = DockStyle.Top, Height = 58 };
             top.Controls.Add(new Label() { Text = "Param:", Location = new Point(3, 6), AutoSize = true });
-            cmbParam = new ComboBox() { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(55, 3), Width = 240, MaxDropDownItems = 25 };
+            cmbParam = new ComboBox() { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(55, 3), Width = 240, MaxDropDownItems = 25, DropDownWidth = 360 };
             cmbParam.SelectedIndexChanged += (s, e) => selectParam(cmbParam.SelectedItem as LiveParam);
             top.Controls.Add(cmbParam);
             btnParamReload = new Button() { Text = "Reload", Location = new Point(300, 2), Width = 84, UseVisualStyleBackColor = true };
-            btnParamReload.Click += (s, e) => loadParams(true);
+            btnParamReload.Click += (s, e) => loadParams();
             top.Controls.Add(btnParamReload);
-            top.Controls.Add(new Label() { Text = "Search:", Location = new Point(3, 35), AutoSize = true });
+            top.Controls.Add(new Label() { Text = "Find row:", Location = new Point(3, 35), AutoSize = true });
             txtParamSearch = new TextBox() { Location = new Point(55, 32), Width = 329 };
             txtParamSearch.TextChanged += (s, e) => fillParamRows();
             top.Controls.Add(txtParamSearch);
@@ -58,17 +117,34 @@ namespace DSR_Gadget
             btnParamResetAll = new Button() { Text = "Reset all changes", Location = new Point(97, 3), Width = 120, UseVisualStyleBackColor = true };
             btnParamResetAll.Click += (s, e) => resetAllParamChanges();
             bottom.Controls.Add(btnParamResetAll);
-            cbxParamShowPadding = new CheckBox() { Text = "Show padding", Location = new Point(225, 7), AutoSize = true };
+            cbxParamShowPadding = new CheckBox() { Text = "Show unused/padding", Location = new Point(225, 7), AutoSize = true };
             cbxParamShowPadding.CheckedChanged += (s, e) => fillParamFields();
             bottom.Controls.Add(cbxParamShowPadding);
             lblParamStatus = new Label() { Location = new Point(3, 31), Size = new Size(384, 18), AutoEllipsis = true };
             bottom.Controls.Add(lblParamStatus);
 
-            // --- Middle: rows on top, fields below ---
+            // --- Middle: rows on top; field finder, fields and help text below ---
             SplitContainer split = new SplitContainer() { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal };
             lbxParamRows = new ListBox() { Dock = DockStyle.Fill, IntegralHeight = false, HorizontalScrollbar = true };
             lbxParamRows.SelectedIndexChanged += (s, e) => selectParamRow(lbxParamRows.SelectedItem as LiveParamRow);
             split.Panel1.Controls.Add(lbxParamRows);
+
+            Panel findPanel = new Panel() { Dock = DockStyle.Top, Height = 26 };
+            findPanel.Controls.Add(new Label() { Text = "Find field:", Location = new Point(0, 6), AutoSize = true });
+            txtParamFieldFind = new TextBox() { Location = new Point(60, 3), Width = 320, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top };
+            txtParamFieldFind.TextChanged += (s, e) => fillParamFields();
+            findPanel.Controls.Add(txtParamFieldFind);
+
+            txtParamHelp = new TextBox()
+            {
+                Dock = DockStyle.Bottom,
+                Height = 92,
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                BackColor = SystemColors.Info,
+                ForeColor = SystemColors.InfoText,
+            };
 
             dgvParamFields = new DataGridView()
             {
@@ -78,34 +154,43 @@ namespace DSR_Gadget
                 AllowUserToResizeRows = false,
                 RowHeadersVisible = false,
                 SelectionMode = DataGridViewSelectionMode.CellSelect,
+                MultiSelect = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-                EditMode = DataGridViewEditMode.EditOnKeystrokeOrF2,
+                EditMode = DataGridViewEditMode.EditOnEnter,
                 BackgroundColor = SystemColors.Window,
                 ShowCellToolTips = true,
             };
-            dgvParamFields.Columns.Add(new DataGridViewTextBoxColumn() { Name = "Field", HeaderText = "Field", ReadOnly = true, FillWeight = 55 });
-            dgvParamFields.Columns.Add(new DataGridViewTextBoxColumn() { Name = "Type", HeaderText = "Type", ReadOnly = true, FillWeight = 15 });
+            dgvParamFields.Columns.Add(new DataGridViewTextBoxColumn() { Name = "Field", HeaderText = "Field", ReadOnly = true, FillWeight = 45 });
             dgvParamFields.Columns.Add(new DataGridViewTextBoxColumn() { Name = "Value", HeaderText = "Value", FillWeight = 30 });
-            dgvParamFields.CellEndEdit += dgvParamFields_CellEndEdit;
-            dgvParamFields.CellDoubleClick += (s, e) =>
+            dgvParamFields.Columns.Add(new DataGridViewTextBoxColumn() { Name = "Means", HeaderText = "Points to", ReadOnly = true, FillWeight = 25 });
+            dgvParamFields.CellValueChanged += dgvParamFields_CellValueChanged;
+            dgvParamFields.CurrentCellDirtyStateChanged += (s, e) =>
             {
-                if (e.RowIndex >= 0 && e.ColumnIndex == 2 && !dgvParamFields.Rows[e.RowIndex].Cells[2].ReadOnly)
-                    dgvParamFields.BeginEdit(true);
+                // Make dropdown choices take effect as soon as they're picked
+                if (dgvParamFields.CurrentCell is DataGridViewComboBoxCell && dgvParamFields.IsCurrentCellDirty)
+                    dgvParamFields.CommitEdit(DataGridViewDataErrorContexts.Commit);
             };
+            dgvParamFields.DataError += (s, e) => { e.ThrowException = false; };
+            dgvParamFields.SelectionChanged += (s, e) => showParamHelp();
+
             split.Panel2.Controls.Add(dgvParamFields);
+            split.Panel2.Controls.Add(txtParamHelp);
+            split.Panel2.Controls.Add(findPanel);
 
             tpgParams.Controls.Add(split);
             tpgParams.Controls.Add(top);
             tpgParams.Controls.Add(bottom);
-            split.SplitterDistance = 170;
+            split.SplitterDistance = 140;
 
             addTabWithWrapping(tpgParams);
             tclMain.SelectedIndexChanged += (s, e) =>
             {
                 if (tclMain.SelectedTab == tpgParams && liveParams == null)
-                    loadParams(false);
+                    loadParams();
             };
 
+            txtParamHelp.Text = "Pick a param and a row, then click a value to change it. "
+                + "Select a field to see what it does here.";
             setParamStatus("Open this tab with the game running to load its params.");
             updateParamButtons();
         }
@@ -137,10 +222,15 @@ namespace DSR_Gadget
             lblParamStatus.Text = text;
         }
 
+        private static string paramDisplayName(LiveParam param)
+        {
+            return paramFriendlyNames.TryGetValue(param.Name, out string friendly) ? $"{friendly}  ({param.Name})" : param.Name;
+        }
+
         private void updateParamButtons()
         {
-            bool haveRow = currentParam != null && currentRow != null;
-            btnParamResetRow.Enabled = haveRow && rowIsChanged(currentParam, currentRow);
+            bool haveRow = currentParam != null && currentRow != null && currentParam.Problem == null;
+            btnParamResetRow.Enabled = haveRow && getOriginal(currentParam, currentRow) != null;
             btnParamResetAll.Enabled = paramOriginals.Values.Any(d => d.Count > 0);
         }
 
@@ -164,7 +254,7 @@ namespace DSR_Gadget
             return names;
         }
 
-        private void loadParams(bool userAsked)
+        private void loadParams()
         {
             if (!Hook.Hooked)
             {
@@ -186,9 +276,12 @@ namespace DSR_Gadget
                 return;
             }
 
+            foreach (LiveParam param in liveParams)
+                param.DisplayName = paramDisplayName(param);
+
             cmbParam.BeginUpdate();
             cmbParam.Items.Clear();
-            foreach (LiveParam param in liveParams.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
+            foreach (LiveParam param in liveParams.OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase))
                 cmbParam.Items.Add(param);
             cmbParam.EndUpdate();
 
@@ -276,79 +369,268 @@ namespace DSR_Gadget
             try
             {
                 if (!checkParamUsable())
+                {
+                    showParamHelp();
                     return;
+                }
 
+                ParamHelpInfo info = ParamHelp.For(currentParam.Def);
                 byte[] bytes = Hook.ReadParamRow(currentParam, currentRow);
                 byte[] original = getOriginal(currentParam, currentRow);
+                string find = txtParamFieldFind.Text.Trim();
+
                 foreach (ParamField field in currentParam.Def.Fields)
                 {
-                    if (field.IsPadding && !cbxParamShowPadding.Checked)
+                    ParamFieldHelp help = info.For(field);
+                    bool padding = field.IsPadding || field.Type == "dummy8" || (help?.IsPadding ?? false);
+                    if (padding && !cbxParamShowPadding.Checked)
                         continue;
-                    if (field.Type == "dummy8" && field.IsBitfield && !cbxParamShowPadding.Checked)
+                    if ((help?.IsObsolete ?? false) && !cbxParamShowPadding.Checked)
                         continue;
 
-                    int index = dgvParamFields.Rows.Add(field.Name, field.TypeLabel, field.Read(bytes));
-                    DataGridViewRow gridRow = dgvParamFields.Rows[index];
-                    gridRow.Tag = field;
-                    bool editable = !field.IsPadding && !field.IsText;
-                    gridRow.Cells[2].ReadOnly = !editable;
+                    string display = !string.IsNullOrWhiteSpace(help?.Name) ? help.Name : field.Name;
+                    if (find.Length > 0
+                        && display.IndexOf(find, StringComparison.OrdinalIgnoreCase) < 0
+                        && field.Name.IndexOf(find, StringComparison.OrdinalIgnoreCase) < 0)
+                        continue;
+
+                    ParamGridTag tag = new ParamGridTag() { Field = field, Help = help, DisplayName = display };
+                    DataGridViewRow gridRow = new DataGridViewRow();
+                    gridRow.CreateCells(dgvParamFields);
+                    gridRow.Tag = tag;
+                    gridRow.Cells[0].Value = display;
+                    gridRow.Cells[0].ToolTipText = field.Name;
+
+                    bool editable = !padding && !field.IsText;
+                    tag.Choices = buildChoices(field, help);
+                    if (editable && tag.Choices != null)
+                    {
+                        DataGridViewComboBoxCell combo = new DataGridViewComboBoxCell() { FlatStyle = FlatStyle.Flat, DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton };
+                        foreach (string choice in tag.Choices.Keys)
+                            combo.Items.Add(choice);
+                        gridRow.Cells[1] = combo;
+                    }
+                    string current = valueText(tag, bytes);
+                    if (gridRow.Cells[1] is DataGridViewComboBoxCell comboCell && !comboCell.Items.Contains(current))
+                        comboCell.Items.Add(current);   // a number that isn't one of the listed choices
+                    gridRow.Cells[1].Value = current;
+                    gridRow.Cells[1].ReadOnly = !editable;
                     if (!editable)
-                        gridRow.Cells[2].Style.ForeColor = SystemColors.GrayText;
-                    if (!string.IsNullOrWhiteSpace(field.Description))
-                        gridRow.Cells[0].ToolTipText = field.Description;
-                    markParamCell(gridRow, field, bytes, original);
+                        gridRow.Cells[1].Style.ForeColor = SystemColors.GrayText;
+                    gridRow.Cells[2].Value = describeReference(help, field, bytes);
+
+                    dgvParamFields.Rows.Add(gridRow);
+                    markParamCell(gridRow, tag, bytes, original);
                 }
-                setParamStatus($"{currentParam.Name} row {currentRow.ID}" + (string.IsNullOrEmpty(currentRow.Name) ? "" : " (" + currentRow.Name + ")")
-                    + ". Double-click a value to edit it.");
+
+                setParamStatus($"{currentRow.ID}" + (string.IsNullOrEmpty(currentRow.Name) ? "" : " " + currentRow.Name)
+                    + " - click a value to change it.");
             }
             finally
             {
                 paramGridFilling = false;
                 updateParamButtons();
+                showParamHelp();
             }
         }
 
-        // Highlights values that differ from the game's original
-        private void markParamCell(DataGridViewRow gridRow, ParamField field, byte[] bytes, byte[] original)
+        // Dropdown choices for value lists and yes/no fields, or null for plain numbers
+        private static Dictionary<string, long> buildChoices(ParamField field, ParamFieldHelp help)
         {
-            bool changed = original != null && field.Read(original) != field.Read(bytes);
-            gridRow.Cells[2].Style.BackColor = changed ? Color.LightGoldenrodYellow : SystemColors.Window;
-            if (paramBoldFont == null)
-                paramBoldFont = new Font(dgvParamFields.Font, FontStyle.Bold);
-            gridRow.Cells[2].Style.Font = changed ? paramBoldFont : null;
-            if (changed)
-                gridRow.Cells[2].ToolTipText = "Original: " + field.Read(original);
-            else
-                gridRow.Cells[2].ToolTipText = "";
+            List<KeyValuePair<long, string>> options = ParamHelp.Enum(help?.Enum);
+            if (options != null && options.Count > 0)
+            {
+                Dictionary<string, long> choices = new Dictionary<string, long>();
+                foreach (var option in options)
+                {
+                    string text = $"{option.Value} ({option.Key})";
+                    if (!choices.ContainsKey(text))
+                        choices[text] = option.Key;
+                }
+                return choices;
+            }
+            if ((help?.IsBool ?? false) || (field.IsBitfield && field.BitSize == 1))
+                return new Dictionary<string, long>() { ["Yes"] = 1, ["No"] = 0 };
+            return null;
         }
 
-        private void dgvParamFields_CellEndEdit(object sender, DataGridViewCellEventArgs e)
+        // The text shown in the Value cell; adds the current number to the dropdown if it isn't a listed choice
+        private string valueText(ParamGridTag tag, byte[] bytes)
         {
-            if (paramGridFilling || e.RowIndex < 0 || e.ColumnIndex != 2)
+            string raw = tag.Field.Read(bytes);
+            if (tag.Choices == null || !long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out long value))
+                return raw;
+            foreach (var choice in tag.Choices)
+                if (choice.Value == value)
+                    return choice.Key;
+            return raw;
+        }
+
+        // For fields that hold the ID of a row in another param, shows that row's name
+        private string describeReference(ParamFieldHelp help, ParamField field, byte[] bytes)
+        {
+            if (string.IsNullOrEmpty(help?.Refs) || liveParams == null)
+                return null;
+            if (!long.TryParse(field.Read(bytes), NumberStyles.Integer, CultureInfo.InvariantCulture, out long id))
+                return null;
+            if (id < 0)
+                return "(none)";
+
+            foreach (string part in splitRefs(help.Refs))
+            {
+                string name = part;
+                string condition = null;
+                int paren = part.IndexOf('(');
+                if (paren > 0 && part.EndsWith(")"))
+                {
+                    name = part.Substring(0, paren).Trim();
+                    condition = part.Substring(paren + 1, part.Length - paren - 2);
+                }
+
+                if (condition != null && !conditionHolds(condition, bytes))
+                    continue;
+
+                if (paramRefAliases.TryGetValue(name, out string alias))
+                    name = alias;
+                LiveParam target = liveParams.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) && p.Problem == null);
+                if (target == null)
+                    continue;
+                LiveParamRow row = target.FindRow((int)id);
+                if (row != null)
+                {
+                    string friendly = paramFriendlyNames.TryGetValue(target.Name, out string f) ? f : target.Name;
+                    return (string.IsNullOrEmpty(row.Name) ? "row " + row.ID : row.Name) + " [" + friendly + "]";
+                }
+            }
+            return id == 0 ? null : "(no such row)";
+        }
+
+        private bool conditionHolds(string condition, byte[] bytes)
+        {
+            int equals = condition.IndexOf('=');
+            if (equals <= 0)
+                return true;
+            string fieldName = condition.Substring(0, equals).Trim();
+            string expected = condition.Substring(equals + 1).Trim();
+            ParamField other = currentParam.Def.Fields.FirstOrDefault(f => string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+            return other == null || other.Read(bytes) == expected;
+        }
+
+        private static IEnumerable<string> splitRefs(string refs)
+        {
+            int depth = 0, start = 0;
+            for (int i = 0; i < refs.Length; i++)
+            {
+                if (refs[i] == '(') depth++;
+                else if (refs[i] == ')') depth--;
+                else if (refs[i] == ',' && depth == 0)
+                {
+                    yield return refs.Substring(start, i - start).Trim();
+                    start = i + 1;
+                }
+            }
+            if (start < refs.Length)
+                yield return refs.Substring(start).Trim();
+        }
+
+        // Highlights values that differ from the game's original
+        private void markParamCell(DataGridViewRow gridRow, ParamGridTag tag, byte[] bytes, byte[] original)
+        {
+            bool changed = original != null && tag.Field.Read(original) != tag.Field.Read(bytes);
+            if (paramBoldFont == null)
+                paramBoldFont = new Font(dgvParamFields.Font, FontStyle.Bold);
+            gridRow.Cells[1].Style.BackColor = changed ? Color.LightGoldenrodYellow : SystemColors.Window;
+            gridRow.Cells[1].Style.Font = changed ? paramBoldFont : null;
+            gridRow.Cells[1].ToolTipText = changed ? "Original: " + valueText(tag, original) : "";
+        }
+
+        private void showParamHelp()
+        {
+            if (txtParamHelp == null)
+                return;
+
+            ParamGridTag tag = dgvParamFields.CurrentRow?.Tag as ParamGridTag;
+            if (tag == null || currentParam?.Def == null)
+            {
+                string description = currentParam?.Def == null ? null : ParamHelp.For(currentParam.Def).Description;
+                txtParamHelp.Text = string.IsNullOrWhiteSpace(description)
+                    ? "Pick a param and a row, then click a value to change it. Select a field to see what it does here."
+                    : currentParam.DisplayName + "\r\n" + description.Replace("\n", "\r\n");
+                return;
+            }
+
+            ParamField field = tag.Field;
+            List<string> lines = new List<string>();
+            lines.Add(tag.DisplayName);
+            string details = field.Name + ", " + describeType(field);
+            lines.Add("(" + details + ")");
+            if (!string.IsNullOrWhiteSpace(tag.Help?.Description))
+                lines.Add(tag.Help.Description);
+            else
+                lines.Add("No description available for this field.");
+            if (tag.Help?.IsObsolete ?? false)
+                lines.Add("This field isn't used by the game.");
+            if (!string.IsNullOrEmpty(tag.Help?.Refs))
+                lines.Add("This is the ID of a row in another param; the 'Points to' column shows which one.");
+            string original = dgvParamFields.CurrentRow.Cells[1].ToolTipText;
+            if (!string.IsNullOrEmpty(original))
+                lines.Add(original);
+            txtParamHelp.Text = string.Join("\r\n", lines).Replace("\r\n", "\n").Replace("\n", "\r\n");
+        }
+
+        private static string describeType(ParamField field)
+        {
+            if (field.IsBitfield)
+                return field.BitSize == 1 ? "on/off flag" : $"whole number 0 to {(1L << field.BitSize) - 1}";
+            switch (field.Type)
+            {
+                case "s8": return "whole number -128 to 127";
+                case "u8": return "whole number 0 to 255";
+                case "s16": return "whole number -32768 to 32767";
+                case "u16": return "whole number 0 to 65535";
+                case "s32": return "whole number";
+                case "u32": return "whole number, 0 or more";
+                case "f32": return "decimal number";
+                case "fixstr":
+                case "fixstrW": return "text (view only)";
+                default: return "unused bytes";
+            }
+        }
+
+        private void dgvParamFields_CellValueChanged(object sender, DataGridViewCellEventArgs e)
+        {
+            if (paramGridFilling || e.RowIndex < 0 || e.ColumnIndex != 1)
                 return;
             DataGridViewRow gridRow = dgvParamFields.Rows[e.RowIndex];
-            ParamField field = gridRow.Tag as ParamField;
-            if (field == null || !checkParamUsable())
+            ParamGridTag tag = gridRow.Tag as ParamGridTag;
+            if (tag == null || !checkParamUsable())
                 return;
+            ParamField field = tag.Field;
+
+            // Turn what's in the cell back into a plain number
+            string shown = Convert.ToString(gridRow.Cells[1].Value, CultureInfo.InvariantCulture) ?? "";
+            string typed = shown;
+            if (tag.Choices != null && tag.Choices.TryGetValue(shown, out long chosen))
+                typed = chosen.ToString(CultureInfo.InvariantCulture);
 
             // Work on fresh bytes from the game, so nothing else in the row is overwritten with stale data
             byte[] bytes = Hook.ReadParamRow(currentParam, currentRow);
-            string typed = Convert.ToString(gridRow.Cells[2].Value, CultureInfo.InvariantCulture);
-            if (typed == field.Read(bytes))
+            if (typed.Trim() == field.Read(bytes))
                 return;
 
-            rememberOriginal(currentParam, currentRow, bytes);
+            byte[] before = (byte[])bytes.Clone();
             string error = field.Write(bytes, typed);
             if (error != null)
             {
                 paramGridFilling = true;
-                gridRow.Cells[2].Value = field.Read(Hook.ReadParamRow(currentParam, currentRow));
+                gridRow.Cells[1].Value = valueText(tag, before);
                 paramGridFilling = false;
-                setParamStatus(field.Name + ": " + error);
-                MessageBox.Show(error, field.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                setParamStatus(tag.DisplayName + ": " + error);
+                MessageBox.Show(error, tag.DisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
+            rememberOriginal(currentParam, currentRow, before);
             if (!Hook.WriteParamRow(currentParam, currentRow, bytes))
             {
                 setParamStatus("Couldn't write to the game's memory.");
@@ -357,11 +639,16 @@ namespace DSR_Gadget
 
             byte[] after = Hook.ReadParamRow(currentParam, currentRow);
             paramGridFilling = true;
-            gridRow.Cells[2].Value = field.Read(after);
-            markParamCell(gridRow, field, after, getOriginal(currentParam, currentRow));
+            gridRow.Cells[1].Value = valueText(tag, after);
+            markParamCell(gridRow, tag, after, getOriginal(currentParam, currentRow));
+            // A change can affect what other fields point to (some references depend on another field)
+            foreach (DataGridViewRow other in dgvParamFields.Rows)
+                if (other.Tag is ParamGridTag otherTag)
+                    other.Cells[2].Value = describeReference(otherTag.Help, otherTag.Field, after);
             paramGridFilling = false;
-            setParamStatus($"Set {field.Name} to {field.Read(after)}.");
+            setParamStatus($"Set {tag.DisplayName} to {valueText(tag, after)}.");
             updateParamButtons();
+            showParamHelp();
         }
 
         private void rememberOriginal(LiveParam param, LiveParamRow row, byte[] bytes)
@@ -377,12 +664,6 @@ namespace DSR_Gadget
             if (paramOriginals.TryGetValue(param.Name, out var rows) && rows.TryGetValue(row.ID, out byte[] bytes))
                 return bytes;
             return null;
-        }
-
-        private bool rowIsChanged(LiveParam param, LiveParamRow row)
-        {
-            byte[] original = getOriginal(param, row);
-            return original != null && Hook.Hooked && !original.SequenceEqual(Hook.ReadParamRow(param, row));
         }
 
         private void resetCurrentParamRow()

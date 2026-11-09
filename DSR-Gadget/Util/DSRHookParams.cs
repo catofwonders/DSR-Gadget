@@ -18,8 +18,23 @@ namespace DSR_Gadget
         public IntPtr Base;          // start of the param data in memory
         public List<LiveParamRow> Rows = new List<LiveParamRow>();
         public string Problem;       // why it can't be edited, if it can't
+        public string DisplayName;   // friendly name for the dropdown
 
-        public override string ToString() => Problem == null ? Name : Name + " (unavailable)";
+        private Dictionary<int, LiveParamRow> byId;
+
+        public LiveParamRow FindRow(int id)
+        {
+            if (byId == null)
+            {
+                byId = new Dictionary<int, LiveParamRow>();
+                foreach (LiveParamRow row in Rows)
+                    if (!byId.ContainsKey(row.ID))
+                        byId[row.ID] = row;
+            }
+            return byId.TryGetValue(id, out LiveParamRow found) ? found : null;
+        }
+
+        public override string ToString() => (DisplayName ?? Name) + (Problem == null ? "" : " (unavailable)");
     }
 
     internal class LiveParamRow

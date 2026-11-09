@@ -125,6 +125,7 @@ namespace DSR_Gadget
     internal class ParamDef
     {
         public string ParamType;
+        public string DefFile;       // file name without extension, e.g. EquipParamWeapon (Smithbox meta uses the same names)
         public List<ParamField> Fields = new List<ParamField>();
         public int RowSize;
 
@@ -144,6 +145,7 @@ namespace DSR_Gadget
             xml.Load(path);
             ParamDef def = new ParamDef();
             def.ParamType = xml.SelectSingleNode("/PARAMDEF/ParamType")?.InnerText?.Trim();
+            def.DefFile = Path.GetFileNameWithoutExtension(path);
 
             int offset = 0;
             int bitOffset = -1;

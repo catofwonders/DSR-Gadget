@@ -30,6 +30,15 @@ You can also try adding DS Gadget as an exception to your antivirus
 # Change Log
 
 ## **Best bet is to use this offline for now.**
+### Release 1.8.0 (catofwonders fork)
+
+* Params tab speaks English: plain field names ("Damage: Physical", "Weight", "Requirement: STR") instead of internal names
+* A help box explains what the selected field does
+* Fields with set choices (weapon category, element, etc.) and on/off flags are dropdowns
+* Fields that point at another param show what they point to (e.g. which special effect)
+* Friendly param names in the dropdown ("Weapons", "Spells", "Enemies and NPCs"...) and a field finder
+* English names, descriptions and value lists from Smithbox by Vawser and contributors (MIT license), in Resources/Params/Smithbox
+
 ### Release 1.7.0 (catofwonders fork)
 
 * New Params tab: a live param editor. Pick any of the game's 38 params, find a row by ID or name, and edit its fields while the game runs

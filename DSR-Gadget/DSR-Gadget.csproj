@@ -114,6 +114,7 @@
     <Compile Include="Util\CodePatch.cs" />
     <Compile Include="Util\DSRHookParams.cs" />
     <Compile Include="Util\ParamDef.cs" />
+    <Compile Include="Util\ParamHelp.cs" />
     <Compile Include="Util\DSROffsets.cs" />
     <Compile Include="FormMain Tabs\Misc.cs">
       <SubType>Form</SubType>
