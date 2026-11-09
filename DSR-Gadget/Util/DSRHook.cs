@@ -713,6 +713,11 @@ namespace DSR_Gadget
             MenuMan.WriteInt32((int)DSROffsets.MenuMan.MenuKick, 2);
         }
 
+        public void StandUp()
+        {
+            ChrData1.WriteInt32((int)DSROffsets.PlayerIns.ForcePlayAnimation1,0); // -1 or w/e
+        }
+
         public bool HUD
         {
             get => SettingsPtr.ReadBoolean((int)DSROffsets.Settings.HUD);

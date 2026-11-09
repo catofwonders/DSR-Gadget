@@ -83,9 +83,10 @@ namespace DSR_Gadget
             CurrentPlayers = 0x18, // List of PlayerIns of current players
             ChrRes = 0x10,
             PlayerCtrl = 0x68,
-            ChrType = 0xD4,
-            TeamType = 0xD8,
-            ChrFlags1 = 0x2A4,
+            ChrType = 0xD4, //74
+            TeamType = 0xD8, //78
+            ForcePlayAnimation1 = 0x16C,
+            ChrFlags1 = 0x2A4, //1FC
             Opactiy = 0x328,
             MPAreaID = 0x354,
             AreaID = 0x358,

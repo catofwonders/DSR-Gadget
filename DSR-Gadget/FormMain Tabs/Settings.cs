@@ -164,6 +164,9 @@ namespace DSR_Gadget
                 if (loaded && !reading)
                 {
                     Player.CurrentAnimation = -1;
+                    //Player.C
+                    //Player.T
+                    Hook.StandUp();
                 }
             }));
 
