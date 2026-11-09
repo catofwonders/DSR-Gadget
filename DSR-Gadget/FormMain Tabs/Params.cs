@@ -124,7 +124,15 @@ namespace DSR_Gadget
             bottom.Controls.Add(lblParamStatus);
 
             // --- Middle: rows on top; field finder, fields and help text below ---
-            SplitContainer split = new SplitContainer() { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal };
+            // Starts with a real size (docking resizes it later) so the divider position below is always valid
+            SplitContainer split = new SplitContainer()
+            {
+                Orientation = Orientation.Horizontal,
+                Size = new Size(390, 600),
+                Panel1MinSize = 40,
+                Panel2MinSize = 120,
+                FixedPanel = FixedPanel.Panel1,
+            };
             lbxParamRows = new ListBox() { Dock = DockStyle.Fill, IntegralHeight = false, HorizontalScrollbar = true };
             lbxParamRows.SelectedIndexChanged += (s, e) => selectParamRow(lbxParamRows.SelectedItem as LiveParamRow);
             split.Panel1.Controls.Add(lbxParamRows);
@@ -181,6 +189,7 @@ namespace DSR_Gadget
             tpgParams.Controls.Add(top);
             tpgParams.Controls.Add(bottom);
             split.SplitterDistance = 140;
+            split.Dock = DockStyle.Fill;
 
             addTabWithWrapping(tpgParams);
             tclMain.SelectedIndexChanged += (s, e) =>

@@ -30,6 +30,10 @@ You can also try adding DS Gadget as an exception to your antivirus
 # Change Log
 
 ## **Best bet is to use this offline for now.**
+### Release 1.8.1 (catofwonders fork)
+
+* Fixed a crash on startup caused by the Params tab layout
+
 ### Release 1.8.0 (catofwonders fork)
 
 * Params tab speaks English: plain field names ("Damage: Physical", "Weight", "Requirement: STR") instead of internal names
